@@ -4,7 +4,7 @@ from pyspark.sql.dataframe import DataFrame
 
 def query_1(output_table_name: str) -> str:
     query = f"""
-    WITH lagged AS (
+        WITH lagged AS (
         SELECT player_name,
           CASE WHEN is_active THEN 1 ELSE 0 END AS is_active,
           current_season,
