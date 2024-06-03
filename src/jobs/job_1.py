@@ -27,9 +27,8 @@ def query_1(output_table_name: str) -> str:
     return query
 
 def job_1(spark_session: SparkSession, output_table_name: str) -> Optional[DataFrame]:
-  output_df = spark_session.table(output_table_name)
-  output_df.createOrReplaceTempView(output_table_name)
-  return spark_session.sql(query_1(output_table_name))
+  input_df.createOrReplaceTempView(input_table_name)
+  return spark_session.sql(query_1(input_table_name))
 
 def main():
     input_table_name: str = "nba_players"
@@ -41,5 +40,5 @@ def main():
         .getOrCreate()
     )
     input_df = spark_session.table(input_table_name)
-    output_df = job_1(spark_session, output_table_name)
+    output_df = job_1(spark_session, input_df, input_table_name)
     output_df.write.mode("overwrite").insertInto(output_table_name)
