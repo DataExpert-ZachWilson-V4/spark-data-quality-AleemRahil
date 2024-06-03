@@ -1,83 +1,159 @@
 from chispa.dataframe_comparer import assert_df_equality
-
-from chispa.dataframe_comparer import *
-
 from collections import namedtuple
-from pyspark.sql.types import StructType, StructField, StringType, LongType, ArrayType,BooleanType, DateType
+from datetime import date, datetime
+import pytz
 
-from jobs import job_2
-
-# define named tuples
-PlayerSeason = namedtuple("PlayerSeason", "player_name is_active current_season")
-PlayerScd = namedtuple("PlayerScd", "player_name is_active start_season end_season")
-
+from src.jobs.Update_Actors_CT import Update_Actors_CT
+from src.jobs.Update_User_Devices_Cumulated import Update_User_Devices_Cumulated
 
 def test_job_1(spark_session):
-    input_table_name: str = "nba_players"
-    source_data = [
-        PlayerSeason("Michael Jordan", True, 2011),
-        PlayerSeason("Michael Jordan", True, 2012),
-        PlayerSeason("Michael Jordan", True, 2013),
-        PlayerSeason("Michael Jordan", False, 2014),
-        PlayerSeason("Michael Jordan", False, 2015),
-        PlayerSeason("LeBron James", True, 2013),
-        PlayerSeason("LeBron James", True, 2014),
-        PlayerSeason("LeBron James", True, 2015),
-        PlayerSeason("Scottie Pippen", True, 2011),
-        PlayerSeason("Scottie Pippen", False, 2012),
-        PlayerSeason("Scottie Pippen", False, 2013),
-        PlayerSeason("Scottie Pippen", True, 2014),
-        PlayerSeason("Scottie Pippen", True, 2015)
-    ]
-    source_df = spark_session.createDataFrame(source_data)
 
-    from jobs.job_1 import job_1
-    actual_df = job_1(spark_session, source_df, input_table_name)
+    # Define named tuples for input data and expected data
+    actor_films = namedtuple("actor_film", "actor actor_id film year votes rating film_id") 
+    actors = namedtuple("actors", "actor actor_id films quality_class is_active current_year")
+    films = namedtuple("films", "film votes rating film_id") 
+
+    # Input data for testing
+    input_actor_films_data = [
+        actor_films(
+            actor='Lillian Gish',
+            actor_id = 'nm0001273',
+            film = 'The Birth of a Nation',
+            year = 1915,
+            votes = 22989,
+            rating = 6.3,
+            film_id = 'tt0004972'
+        )
+    ]
+
+    # Existing data for testing
+    existing_actors_data = [
+        actors(
+            actor = 'Lillian Gish',
+            actor_id = 'nm0001273',
+            films = [
+                films(
+                    film = 'Judith of Bethulia',
+                    votes = 1259,
+                    rating = 6.1,
+                    film_id = 'tt0004181'
+                ),
+                films(
+                    film = 'Home, Sweet Home',
+                    votes = 190,
+                    rating = 5.8,
+                    film_id = 'tt0003167'
+                )
+            ],
+            quality_class = 'bad',
+            is_active = True,
+            current_year = 1914
+        )
+    ]
+
+    # Expected data for testing
     expected_data = [
-        PlayerScd("Michael Jordan", True, 2011, 2013),
-        PlayerScd("Michael Jordan", False, 2014, 2015),
-        PlayerScd("Scottie Pippen", True, 2011, 2011),
-        PlayerScd("Scottie Pippen", False, 2012, 2013),
-        PlayerScd("Scottie Pippen", True, 2014, 2015),
-        PlayerScd("LeBron James", True, 2013, 2015)
+        actors(
+            actor = 'Lillian Gish',
+            actor_id = 'nm0001273',
+            films = [
+                films(
+                    film = 'Judith of Bethulia',
+                    votes = 1259,
+                    rating = 6.1,
+                    film_id = 'tt0004181'
+                ),
+                films(
+                    film = 'Home, Sweet Home',
+                    votes = 190,
+                    rating = 5.8,
+                    film_id = 'tt0003167'
+                ),
+                films(
+                    film = 'The Birth of a Nation',
+                    votes = 22989,
+                    rating = 6.3,
+                    film_id = 'tt0004972'
+                )
+
+            ],
+            quality_class = 'average',
+            is_active = True,
+            current_year = 1915
+        )
     ]
+
+    # DataFrame of the input and existing data and views the test will reference
+    input_df = spark_session.createDataFrame(input_actor_films_data)
+    input_df.createOrReplaceTempView("actor_films")
+
+    existing_df = spark_session.createDataFrame(existing_actors_data)
+    existing_df.createOrReplaceTempView("actors")
+
+    # Run the Update_Actors_CT function and compare the output with expected
+    actual_df = Update_Actors_CT(spark_session, "actors", 1915)
     expected_df = spark_session.createDataFrame(expected_data)
-    assert_df_equality(actual_df.sort("player_name", "start_season"), expected_df.sort("player_name", "start_season"))
-
-
-
-
+    assert_df_equality(actual_df, expected_df, ignore_nullable=True)
 
 def test_job_2(spark_session):
 
-    # define named tuples
-    actors = namedtuple("actors", "actor actor_id films quality_class is_active current_year")
+    # Define named tuples for input data and expected data
+    web_events = namedtuple("web_events", "user_id device_id referrer host url event_time")
+    devices = namedtuple("devices", "device_id browser_type os_type device_type")
+    user_devices_cumulated = namedtuple("user_devices_cumulated", "user_id browser_type dates_active date")
 
-    input_data = [
-        actors(actor="Liam Neeson", actor_id="nm0000553", films=[[2021,"The Marksman",2333,5.9,"tt6902332"]], quality_class=1, is_active=1, current_year='2021'),
-        actors(actor="Luenell", actor_id="nm0132685", films=[[2021,"Coming 2 America",49700,5.3,"tt6802400"]], quality_class=0, is_active=1, current_year='2021'),
-        actors(actor="Ruta Lee", actor_id="nm0498181", films=[[2021,"Senior Moment",208,5.2,"tt6588950"]], quality_class=1, is_active=0, current_year='2021'),
-        actors(actor="Michael McElhatton", actor_id="nm0568385", films=[[2021,"Zack Snyder's Justice League",242474,8.2,"tt12361974"]], quality_class=1, is_active=1, current_year='2021')
+    # Input data for testing
+    input_events_data = [
+        web_events(
+            user_id = 495022226,
+            device_id = -2012543895, 
+            referrer = NULL, 
+            host = 'www.zachwilson.tech', 
+            url = '/', 
+            event_time = datetime(2023, 1, 3, 0, 31, tzinfo=pytz.UTC)
+        )
     ]
 
-    input_df = spark_session.createDataFrame(input_data)
+    input_devices_data = [
+        devices(
+            device_id = -2012543895, 
+            browser_type = 'Googlebot', 
+            os_type = 'Other', 
+            device_type = 'Spider'
+        )
+    ]
 
-    # create a temp table from input_df
-    input_df.createOrReplaceTempView("actors")
-    test_output_table_name = "actors"
+    # Existing data for testing
+    existing_user_devices_cumulated_data = [
+        user_devices_cumulated(
+            user_id = 495022226,
+            browser_type = 'Googlebot',
+            dates_active = [datetime.strptime("2023-01-02", "%Y-%m-%d").date()],
+            date = datetime.strptime("2023-01-02", "%Y-%m-%d").date()
+        )
+    ]
 
-    actual_df = job_2.job_2(spark_session, test_output_table_name)
+    # Expected data for testing
+    expected_data = [
+        user_devices_cumulated(
+            user_id = 495022226,
+            browser_type = 'Googlebot',
+            dates_active = [datetime.strptime("2023-01-03", "%Y-%m-%d").date(), datetime.strptime("2023-01-02", "%Y-%m-%d").date()],
+            date = datetime.strptime("2023-01-03", "%Y-%m-%d").date()
+        )
+    ]
 
-    print(f"Resulting Schema {actual_df.schema}")
+    # DataFrame of the input and existing data and views the test will reference
+    input_events_df = spark_session.createDataFrame(input_events_data)
+    input_events_df.createOrReplaceTempView("web_events")
 
-    expected_schema = StructType([
-        StructField("actor", StringType(), True),
-        StructField("actor_id", StringType(), True),
-        StructField("quality_class", LongType(), True),
-        StructField("is_active", LongType(), True),
-        StructField("start_date", StringType(), True),
-        StructField("end_date", StringType(), True),
-        StructField("current_year", StringType(), True)
-    ])
+    input_devices_df = spark_session.createDataFrame(input_devices_data)
+    input_devices_df.createOrReplaceTempView("devices")
 
-    assert actual_df.schema == expected_schema
+    existing_df = spark_session.createDataFrame(existing_user_devices_cumulated_data)
+    existing_df.createOrReplaceTempView("user_devices_cumulated")
+
+    # Run the Update_User_Devices_Cumulated function and compare the output with expected
+    actual_df = Update_User_Devices_Cumulated(spark_session, "user_devices_cumulated")
+    expected_df = spark_session.createDataFrame(expected_data)
+    assert_df_equality(actual_df, expected_df, ignore_nullable=True)
